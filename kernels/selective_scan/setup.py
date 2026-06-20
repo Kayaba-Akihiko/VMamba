@@ -81,8 +81,11 @@ def get_ext():
     print("\n\nCUDA_HOME = {}\n\n".format(CUDA_HOME))
 
     # Check if card has compute capability 8.0 or higher for BFloat16 operations
-    if get_compute_capability() < 80:
-        warnings.warn("This code uses BFloat16 date type, which is only supported on GPU architectures with compute capability 8.0 or higher")
+    if torch.cuda.is_available():
+        if get_compute_capability() < 80:
+            warnings.warn("BF16 is only supported on compute capability 8.0 or higher")
+    else:
+        warnings.warn("No GPU visible during build; using TORCH_CUDA_ARCH_LIST")
         
     multi_threads = True
     if CUDA_HOME is not None:
