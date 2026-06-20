@@ -31,6 +31,34 @@ def get_compute_capability():
     device = torch.device("cuda")
     capability = torch.cuda.get_device_capability(device)
     return int(str(capability[0]) + str(capability[1]))
+
+def get_cuda_arch_flags_from_env():
+    arch_list = os.getenv("TORCH_CUDA_ARCH_LIST", "").strip()
+
+    # Fallback: build only for the visible GPU if env is not set
+    if not arch_list:
+        return [f"-arch=sm_{get_compute_capability()}"]
+
+    flags = []
+    for arch in arch_list.replace(";", " ").split():
+        arch = arch.strip()
+        if not arch:
+            continue
+
+        with_ptx = arch.endswith("+PTX")
+        arch = arch.replace("+PTX", "")
+
+        if not re.fullmatch(r"\d+(\.\d+)?", arch):
+            raise ValueError(f"Invalid TORCH_CUDA_ARCH_LIST entry: {arch}")
+
+        arch_num = arch.replace(".", "")
+
+        flags.extend(["-gencode", f"arch=compute_{arch_num},code=sm_{arch_num}"])
+
+        if with_ptx:
+            flags.extend(["-gencode", f"arch=compute_{arch_num},code=compute_{arch_num}"])
+
+    return flags
     
 def get_cuda_bare_metal_version(cuda_dir):
     raw_output = subprocess.check_output(
@@ -65,7 +93,7 @@ def get_ext():
         if bare_metal_version < Version("11.2"):
             multi_threads = False
             
-    cc_flag.append(f"-arch=sm_{get_compute_capability()}")
+    cc_flag.extend(get_cuda_arch_flags_from_env())
     
     if multi_threads:
         cc_flag.extend(["--threads", "4"])
